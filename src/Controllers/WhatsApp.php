@@ -4,14 +4,12 @@
 use phpseclib3\Crypt\RSA;
 use phpseclib3\Crypt\AES;
 
-class WhatsAppController   {
+class WhatsAppController {
 
    private $privateKey;
 
-    public function __construct() {
-         $dotenv = Dotenv\Dotenv::createImmutable(__DIR__.'/');
-         $env = $dotenv->load();
-         $this->privateKey = $env['PRIVATE_TEST'];
+    public function __construct($private) {
+         $this->privateKey = $private;
     }
 
     public function post($datos) {
@@ -21,8 +19,18 @@ class WhatsAppController   {
                $aesKey = $this->decryptedAesKey($datos,$privateKey);
           /*2- Desencryptamos Flow Data*/
                $flowData = $this->decryptFlowData($datos,$aesKey);
-               var_dump($flowData);
-     
+
+           /*2- Encryptamos respuesta incluyendo la pantalla a mostrar*/         
+               $screen = [
+               "screen" => "SCREEN_NAME",
+               "data" => [
+                    "some_key" => "some_value"
+               ]
+               ];
+               $resBody = $this->encryptResponse($screen,$flowData['aesKeyBuffer'],$flowData['initialVectorBuffer']);
+          /*3- Devolvemos respuesta encryptada en texto plano*/  
+               echo $resBody;
+               http_response_code(200);
     }
 
      private function decryptedAesKey($datos,$privateKey) 
@@ -35,7 +43,7 @@ class WhatsAppController   {
           ->withMGFHash('sha256');
           $decryptedAesKey = $rsa->decrypt($encryptedAesKey);
           if (!$decryptedAesKey) {
-               throw new Exception('Decryption of AES key failed.');
+                    Api::message(421,"Decryption of AES key failed.","error");
           }
           return $decryptedAesKey;
      }
@@ -44,7 +52,7 @@ class WhatsAppController   {
      {
           $private = RSA::createKey(2048);
           $public = $private->getPublicKey();
-          return $private." ".$public;
+          return $private." ".$public; //guardar valores en archivo env
      }
 
 
@@ -76,6 +84,15 @@ class WhatsAppController   {
                'aesKeyBuffer' => $aesKey,
                'initialVectorBuffer' => $initialVector,
           ];
+     }
+
+     private function encryptResponse($response, $aesKeyBuffer, $initialVectorBuffer)
+     {
+          // Flip the initialization vector
+          $flipped_iv = ~$initialVectorBuffer;
+          // Encrypt the response data
+          $cipher = openssl_encrypt(json_encode($response), 'aes-128-gcm', $aesKeyBuffer, OPENSSL_RAW_DATA, $flipped_iv, $tag);
+          return base64_encode($cipher.$tag);
      }
 
   
