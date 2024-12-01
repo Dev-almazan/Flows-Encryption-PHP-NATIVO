@@ -1,5 +1,6 @@
 
 <?php
+error_reporting(0);
 require  'vendor\autoload.php';
 require  'config.php';
 require  'src\Controllers\WhatsApp.php';
